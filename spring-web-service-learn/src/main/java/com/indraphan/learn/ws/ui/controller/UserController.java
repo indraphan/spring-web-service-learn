@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import javax.validation.Valid;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,14 +22,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.indraphan.learn.ws.exceptions.UserServiceException;
 import com.indraphan.learn.ws.ui.model.request.UpdateUserDetailRequestModel;
 import com.indraphan.learn.ws.ui.model.request.UserDetailsRequestModel;
 import com.indraphan.learn.ws.ui.model.response.UserRest;
+import com.indraphan.learn.ws.userservice.UserService;
 
 @RestController
 @RequestMapping("users")
 public class UserController {
+	
+	@Autowired
+	UserService userService;
+	
 	Map<String, UserRest> users;
 	
 	/**
@@ -44,13 +49,7 @@ public class UserController {
 			@RequestParam(value = "limit", defaultValue = "10") int limit,
 			@RequestParam(value = "sort", defaultValue = "desc", required = false) String sort) 
 	{
-		if(users == null) throw new UserServiceException("User not found");
-		
-		List<UserRest> userList = users.entrySet().stream()
-									.map(Map.Entry::getValue)
-									.skip((page <= 1) ? 0 : (page-1) * limit)
-									.limit(limit)
-									.collect(Collectors.toList());
+		List<UserRest> userList = userService.getUsers(page, limit, sort);
 		
 		return new ResponseEntity<List<UserRest>>(userList, HttpStatus.OK);
 	}
@@ -66,14 +65,9 @@ public class UserController {
 			produces = { MediaType.APPLICATION_XML_VALUE, MediaType.APPLICATION_JSON_VALUE })
 	public ResponseEntity<UserRest> getUser(@PathVariable String userId) 
 	{
-		if(users.containsKey(userId))
-		{
-			return new ResponseEntity<UserRest>(users.get(userId), HttpStatus.OK);
-		} 
-		else 
-		{
-			throw new UserServiceException("User not found");
-		}
+		UserRest user = userService.getUser(userId);
+		
+		return new ResponseEntity<UserRest>(user, HttpStatus.OK);
 	}
 
 	/**
@@ -86,16 +80,7 @@ public class UserController {
 			produces = { MediaType.APPLICATION_XML_VALUE, MediaType.APPLICATION_JSON_VALUE})
 	public ResponseEntity<UserRest> createUser(@Valid @RequestBody UserDetailsRequestModel userDetail) 
 	{
-		UserRest returnValue = new UserRest();
-		returnValue.setEmail(userDetail.getEmail());
-		returnValue.setFirstName(userDetail.getFirstName());
-		returnValue.setLastName(userDetail.getLastName());
-		
-		String userId = UUID.randomUUID().toString();
-		returnValue.setUserId(userId);
-		
-		if(users == null) users = new HashMap<>();
-		users.put(userId, returnValue);
+		UserRest returnValue = userService.createUser(userDetail);
 
 		return new ResponseEntity<UserRest>(returnValue, HttpStatus.OK);
 	}
@@ -112,19 +97,9 @@ public class UserController {
 			produces = { MediaType.APPLICATION_XML_VALUE, MediaType.APPLICATION_JSON_VALUE})
 	public ResponseEntity<UserRest> updateUser(@PathVariable String userId, @Valid @RequestBody UpdateUserDetailRequestModel userDetail) 
 	{ 
-		UserRest user = users.get(userId);
+		UserRest user = userService.updateUser(userId, userDetail);
 		
-		if(user != null) 
-		{
-			user.setFirstName(userDetail.getFirstName());
-			user.setLastName(userDetail.getLastName());
-			
-			users.put(userId, user);
-			
-			return new ResponseEntity<UserRest>(user, HttpStatus.OK);
-		}
-		
-		return new ResponseEntity<UserRest>(HttpStatus.NO_CONTENT);
+		return new ResponseEntity<UserRest>(user, HttpStatus.OK);
 	}
 
 	/**
@@ -136,9 +111,7 @@ public class UserController {
 	@DeleteMapping(path = {"/{userId}"})
 	public ResponseEntity<Void> deleteUser(@PathVariable String userId) 
 	{
-		if(users == null) throw new UserServiceException("User not found");
-		
-		users.remove(userId);
+		userService.deleteUser(userId);
 		
 		return ResponseEntity.noContent().build();
 	}
